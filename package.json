@@ -1,0 +1,89 @@
+{
+  "name": "pdf-to-markdown",
+  "displayName": "PDF to Markdown",
+  "description": "Convert PDF files into clean, structured Markdown inside VS Code with structure preservation, local processing, and configurable settings.",
+  "icon": "icon.ico",
+  "version": "0.1.0",
+  "publisher": "KarthikDasari",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "compile": "tsc --noEmit",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:integration": "vscode-test",
+    "test": "npm run test:unit && npm run test:integration",
+    "lint": "eslint src/ tests/ --ext .ts",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run build -- --production"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.8.69"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.3.9",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "pdfToMarkdown.convert",
+        "title": "Convert PDF to Markdown",
+        "category": "PDF to Markdown"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "pdfToMarkdown.convert",
+          "when": "resourceExtname == .pdf",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "PDF to Markdown",
+      "properties": {
+        "pdfToMarkdown.preserveLayout": {
+          "type": "boolean",
+          "default": false,
+          "description": "Retain original spacing and line breaks from the PDF."
+        },
+        "pdfToMarkdown.detectTables": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable heuristic table detection to produce Markdown tables."
+        },
+        "pdfToMarkdown.mergeLines": {
+          "type": "boolean",
+          "default": true,
+          "description": "Merge text fragments broken across lines into coherent paragraphs."
+        },
+        "pdfToMarkdown.outputFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Default output folder for converted Markdown files. Empty = same folder as source PDF."
+        }
+      }
+    }
+  }
+}

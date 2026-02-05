@@ -1,0 +1,81 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+
+4 0 obj
+<< /Length 598 >>
+stream
+0.4 w
+72 705 m 500 705 l S
+72 683 m 500 683 l S
+72 661 m 500 661 l S
+72 639 m 500 639 l S
+72 617 m 500 617 l S
+72 705 m 72 617 l S
+222 705 m 222 617 l S
+372 705 m 372 617 l S
+500 705 m 500 617 l S
+BT
+/F2 12 Tf
+1 0 0 1 80 695 Tm
+(Name) Tj
+1 0 0 1 230 695 Tm
+(Age) Tj
+1 0 0 1 380 695 Tm
+(City) Tj
+/F1 12 Tf
+1 0 0 1 80 673 Tm
+(Alice) Tj
+1 0 0 1 230 673 Tm
+(30) Tj
+1 0 0 1 380 673 Tm
+(New York) Tj
+/F1 12 Tf
+1 0 0 1 80 651 Tm
+(Bob) Tj
+1 0 0 1 230 651 Tm
+(25) Tj
+1 0 0 1 380 651 Tm
+(San Francisco) Tj
+/F1 12 Tf
+1 0 0 1 80 629 Tm
+(Charlie) Tj
+1 0 0 1 230 629 Tm
+(35) Tj
+1 0 0 1 380 629 Tm
+(Chicago) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000059 00000 n 
+0000000117 00000 n 
+0000000254 00000 n 
+0000000904 00000 n 
+0000001002 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1105
+%%EOF

@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing
+coverage/
+.vscode-test/
+
+# Environment
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Package archives
+*.vsix
+
+.github/
+.specify/
+specs/
+.vscode/
