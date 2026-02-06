@@ -29,7 +29,7 @@ Convert PDF files into clean, structured Markdown inside VS Code. The extension 
 ### From Source
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/karthik-dasari/pdf-to-markdown.git
 cd pdf-to-markdown
 npm install
 npm run build
