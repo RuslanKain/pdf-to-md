@@ -112,7 +112,7 @@ export async function extractWithMupdf(
     const pageWidth = bounds[2] - bounds[0];
     const pageHeight = bounds[3] - bounds[1];
 
-    const blocks = extractPageBlocks(page, imageFormat, imageMinSize);
+    const blocks = extractPageBlocks(page, imageFormat, imageMinSize, mupdf);
 
     pages.push({
       pageNumber: pageIdx + 1,
@@ -137,7 +137,7 @@ export async function extractWithMupdf(
  * Blocks are sorted by y0 (top-to-bottom), then x0 (left-to-right).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractPageBlocks(page: any, imageFormat: 'png' | 'jpg', imageMinSize: number): Block[] {
+function extractPageBlocks(page: any, imageFormat: 'png' | 'jpg', imageMinSize: number, mupdf: any): Block[] {
   const blocks: Block[] = [];
 
   // Collect text block state during walking
