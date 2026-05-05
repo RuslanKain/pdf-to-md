@@ -34,6 +34,7 @@
     "vscode:prepublish": "npm run build -- --production"
   },
   "dependencies": {
+    "mupdf": "^1.27.0",
     "pdfjs-dist": "^4.8.69"
   },
   "devDependencies": {
