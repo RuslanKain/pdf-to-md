@@ -1,180 +1,148 @@
-# PDF to Markdown — VS Code Extension
+# PDF to Markdown (RuslanKain)
 
-Convert PDF files into clean, structured Markdown inside VS Code. The extension extracts text, detects document structure (headings, paragraphs, lists, tables, code blocks), and produces a `.md` file — all processed locally with zero cloud dependencies.
+**Publisher:** RuslanKain  
+**Repository:** [RuslanKain/pdf-to-md](https://github.com/RuslanKain/pdf-to-md)  
+**Version:** 0.2.0
 
-![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+Convert PDF files into clean, structured Markdown directly inside VS Code.  
+Supports text-only PDFs, academic / research papers, and **extracts and embeds figures inline**.
+
+---
 
 ## Features
 
-- **One-click conversion**: Right-click any `.pdf` file in the Explorer → "Convert PDF to Markdown"
-- **Command Palette**: `Ctrl+Shift+P` → "PDF to Markdown: Convert PDF to Markdown"
-- **Structure preservation**: Headings, bold, italic, lists (bullet + ordered), links, code blocks
-- **Table detection**: Heuristic column-boundary analysis renders tables as pipe-delimited Markdown
-- **Side-by-side preview**: Automatically opens the VS Code Markdown preview next to the raw file
-- **Configurable**: Adjust layout preservation, table detection, line merging, and output folder
-- **Graceful error handling**: Clear notifications for corrupt, encrypted, empty, and inaccessible PDFs
-- **Progress indicator**: Per-page progress notification for large documents
-- **100% local**: No data leaves your machine — all processing happens in the extension host
+- **MuPDF WASM engine** (default) — fast, dependency-free, runs entirely in-process.
+- **Image extraction** — figures are saved to a `<pdfStem>.assets/` folder and linked inline.
+- **Caption auto-detection** — lines matching `Figure N`, `Fig. N`, or `Table N` become image alt text.
+- **Heading / bold / italic / code detection** via per-character font metrics.
+- **Table detection** — heuristic column alignment (pdfjs engine).
+- **Line merging** — broken paragraphs from multi-column layouts are rejoined.
+- **pdfjs legacy engine** — original heuristic pipeline, kept for compatibility.
+- **Python sidecar engine** *(optional)* — shells out to `pymupdf4llm` for highest-fidelity research-paper output.
 
-## Installation
+---
 
-### From Marketplace (when published)
+## Engines
 
-1. Open VS Code
-2. Go to Extensions (`Ctrl+Shift+X`)
-3. Search for "PDF to Markdown"
-4. Click **Install**
+Set `pdfToMarkdown.engine` to choose the extraction backend:
 
-### From Source
+| Engine | How it works | Best for |
+|--------|-------------|----------|
+| `mupdf` *(default)* | Bundled MuPDF WASM — no Python needed. Extracts text spans with font metadata and embedded images. | Most PDFs, research papers, technical documents |
+| `pdfjs` | Legacy `pdfjs-dist` heuristic pipeline (original fork behavior). | Simple PDFs where MuPDF output needs debugging |
+| `pythonSidecar` | Shells out to `scripts/convert_pdfs_to_md.py` using `pymupdf4llm`. | Highest fidelity on complex academic papers (requires Python + `pymupdf4llm`) |
 
-```bash
-git clone https://github.com/karthik-dasari/pdf-to-markdown.git
-cd pdf-to-markdown
-npm install
-npm run build
+**MuPDF is the default and recommended engine for research papers.**
+
+---
+
+## Image Handling
+
+When the MuPDF engine converts a PDF, images are saved to a sibling folder:
+
+```
+paper.pdf          → paper.md
+paper.assets/
+  page-1-img-0.png
+  page-2-img-0.png
+  page-2-img-1.png
 ```
 
-Then press `F5` to launch the Extension Development Host.
+### Settings
 
-## Usage
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `pdfToMarkdown.extractImages` | `"inline"` | `"inline"` = write images **and** insert links. `"folder-only"` = write images, no links. `"none"` = skip. |
+| `pdfToMarkdown.imageFormat` | `"png"` | `"png"` or `"jpg"` |
+| `pdfToMarkdown.imageMinSize` | `32` | Minimum width/height in pixels; smaller images are skipped. |
 
-### Context Menu
+### Caption auto-detection
 
-1. Right-click a `.pdf` file in the Explorer sidebar
-2. Select **"Convert PDF to Markdown"**
-3. The `.md` file is saved next to the original and opened with a live preview
+If the block immediately after an image starts with `Figure N`, `Fig. N`, or `Table N`:
 
-### Command Palette
-
-1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS)
-2. Type **"PDF to Markdown: Convert PDF to Markdown"**
-3. Select a PDF file from the file picker
-4. Conversion runs with a progress indicator
-
-## Configuration
-
-All settings are under `pdfToMarkdown.*` in VS Code Settings:
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `pdfToMarkdown.preserveLayout` | boolean | `false` | Retain original spacing and line breaks from the PDF |
-| `pdfToMarkdown.detectTables` | boolean | `true` | Enable heuristic table detection and Markdown table output |
-| `pdfToMarkdown.mergeLines` | boolean | `true` | Merge broken lines into coherent paragraphs |
-| `pdfToMarkdown.outputFolder` | string | `""` | Custom output folder (absolute or workspace-relative). Empty = same directory as source PDF |
-
-### Example settings.json
-
-```json
-{
-  "pdfToMarkdown.preserveLayout": false,
-  "pdfToMarkdown.detectTables": true,
-  "pdfToMarkdown.mergeLines": true,
-  "pdfToMarkdown.outputFolder": "converted"
-}
+```markdown
+![Figure 3: Architecture overview](paper.assets/page-4-img-0.png)
+*Figure 3: Architecture overview*
 ```
 
-## Supported PDF Types
+---
 
-| PDF Type | Support |
-|----------|---------|
-| Text-based PDFs | ✅ Full support |
-| Mixed text + images | ✅ Text extracted, images ignored |
-| Multi-page documents | ✅ All pages processed |
-| PDFs with tables | ✅ Heuristic detection |
-| Scanned/image-only PDFs | ⚠️ Warning shown (no OCR) |
-| Password-protected PDFs | ❌ Warning shown |
-| Corrupt/invalid files | ❌ Error shown |
+## Python Sidecar Engine
+
+For the highest-fidelity output on academic papers:
+
+1. Install Python packages:
+   ```bash
+   pip install pymupdf pymupdf4llm
+   ```
+2. Set `"pdfToMarkdown.engine": "pythonSidecar"` in VS Code settings.
+3. Optionally set `"pdfToMarkdown.pythonPath"` if `python` is not on your PATH.
+
+> **Note:** When using `pythonSidecar`, the `extractImages`, `imageFormat`, and `imageMinSize` settings have no effect.
+
+---
+
+## Settings Reference
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `pdfToMarkdown.engine` | `"mupdf"` | Extraction engine |
+| `pdfToMarkdown.extractImages` | `"inline"` | Image extraction mode |
+| `pdfToMarkdown.imageFormat` | `"png"` | Image output format |
+| `pdfToMarkdown.imageMinSize` | `32` | Minimum image dimension in pixels |
+| `pdfToMarkdown.pythonPath` | `""` | Python interpreter path (pythonSidecar only) |
+| `pdfToMarkdown.preserveLayout` | `false` | Preserve original line breaks |
+| `pdfToMarkdown.detectTables` | `true` | Heuristic table detection (pdfjs engine) |
+| `pdfToMarkdown.mergeLines` | `true` | Merge line fragments into paragraphs |
+| `pdfToMarkdown.outputFolder` | `""` | Output folder (empty = same as source PDF) |
+
+---
 
 ## Architecture
 
 ```
 src/
-├── extension.ts              # Entry point (activate/deactivate)
+├── extension.ts                  VS Code activation
 ├── commands/
-│   └── convert-command.ts    # VS Code command handler (only file with vscode imports)
-├── services/
-│   ├── pdf-extractor.ts      # pdfjs-dist text extraction
-│   ├── text-normalizer.ts    # Line grouping, font detection, paragraph merging
-│   ├── table-detector.ts     # Heuristic table structure detection
-│   ├── markdown-transformer.ts  # Heading/list/code/table → Markdown
-│   └── conversion-pipeline.ts   # Orchestrator: extract → normalize → detect → transform
+│   └── convert-command.ts        Command handler (only file importing vscode)
 ├── models/
-│   ├── types.ts              # All shared TypeScript interfaces
-│   └── errors.ts             # PdfExtractionError with ErrorCode enum
+│   ├── types.ts                  Shared TypeScript types (BBox, Block, etc.)
+│   └── errors.ts                 PdfExtractionError + ErrorCode enum
+├── services/
+│   ├── mupdf-extractor.ts        MuPDF WASM engine (primary)
+│   ├── image-extractor.ts        Write images to disk, return relative paths
+│   ├── python-sidecar.ts         Spawn python + read resulting .md
+│   ├── pdf-extractor.ts          pdfjs-dist engine (legacy)
+│   ├── text-normalizer.ts        Normalize pdfjs text items into lines
+│   ├── table-detector.ts         Heuristic table detection
+│   ├── markdown-transformer.ts   Transform lines/blocks → Markdown
+│   └── conversion-pipeline.ts   Engine selection + pipeline orchestration
 └── utils/
-    └── font-utils.ts         # Font name parsing (bold/italic/monospace)
+    └── font-utils.ts             Font name → bold/italic/monospace
+
+scripts/
+├── convert_pdfs_to_md.py         Standalone Python script (pythonSidecar engine)
+└── README.md                     Script usage docs
 ```
 
-**Design principle**: Only `src/commands/` and `src/extension.ts` import `vscode`. All services are pure TypeScript — testable in isolation.
-
-## Development
-
-### Prerequisites
-
-- Node.js 18+
-- VS Code ^1.85.0
-
-### Setup
-
-```bash
-npm install
-```
-
-### Build
-
-```bash
-npm run build            # Production bundle
-npm run watch            # Watch mode with auto-rebuild
-npm run compile          # TypeScript type-checking only
-```
-
-### Test
-
-```bash
-npm run test:unit        # Vitest unit tests (fast, no VS Code needed)
-npm run test:unit:watch  # Vitest watch mode
-npm run test:integration # Integration tests in Extension Development Host
-npm run test             # Both unit + integration
-```
-
-### Lint
-
-```bash
-npm run lint
-```
-
-### Package
-
-```bash
-npm run package          # Creates .vsix file
-```
-
-### Debug
-
-1. Open this project in VS Code
-2. Press `F5` → "Run Extension" to launch the Extension Development Host
-3. Set breakpoints in `src/` files
-4. Use the "Extension Tests" launch configuration for debugging tests
+---
 
 ## Known Limitations
 
-- **No OCR**: Image-only (scanned) PDFs will produce empty output with a warning
-- **No password support**: Encrypted PDFs are not supported in this version
-- **Table detection is heuristic**: Complex tables with merged cells, nested tables, or irregular layouts may not be detected correctly
-- **No image extraction**: Images in PDFs are ignored; only text content is converted
-- **Font-based heading detection**: Headings are detected by font size + bold heuristics — documents with non-standard font hierarchies may produce incorrect heading levels
-- **Single-file conversion**: Batch conversion is not yet supported
+- **No OCR** — scanned (image-only) PDFs produce empty output. Run OCR first.
+- **Complex multi-column layouts** — may interleave columns. The Python sidecar handles these better.
+- **Encrypted PDFs** — not supported.
+- **Python sidecar** — requires a local Python install with `pymupdf4llm`.
 
-## Contributing
+---
 
-1. Fork the repository
-2. Create a feature branch
-3. Write tests first (TDD approach)
-4. Implement the feature
-5. Ensure all tests pass (`npm test`)
-6. Submit a pull request
+## Development
 
-## License
-
-MIT
+```bash
+npm install
+npm run compile    # TypeScript type check
+npm run build      # esbuild bundle
+npm run test:unit  # Vitest unit tests (no VS Code needed)
+npm run test       # Unit + integration tests
+npm run package    # Produce .vsix
+```

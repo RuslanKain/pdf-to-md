@@ -19,6 +19,11 @@ function readConfiguration(): ConversionConfiguration {
     detectTables: config.get<boolean>('detectTables', true),
     mergeLines: config.get<boolean>('mergeLines', true),
     outputFolder: config.get<string>('outputFolder', ''),
+    engine: config.get<'mupdf' | 'pdfjs' | 'pythonSidecar'>('engine', 'mupdf'),
+    extractImages: config.get<'inline' | 'folder-only' | 'none'>('extractImages', 'inline'),
+    imageFormat: config.get<'png' | 'jpg'>('imageFormat', 'png'),
+    imageMinSize: config.get<number>('imageMinSize', 32),
+    pythonPath: config.get<string>('pythonPath', ''),
   };
 }
 
@@ -91,10 +96,16 @@ export async function handleConvertCommand(uri?: vscode.Uri): Promise<void> {
   }
 
   try {
-    // Read user configuration from VS Code settings (US4)
+    // Read user configuration from VS Code settings
     const config = readConfiguration();
 
-    // Run conversion with progress indicator (US5 - T032)
+    // Determine output directory upfront so it can be passed to the pipeline
+    const outputDir = await resolveOutputDir(filePath, config.outputFolder);
+    const baseName = path.basename(filePath, '.pdf');
+    const outputPath = path.join(outputDir, `${baseName}.md`);
+    const outputUri = vscode.Uri.file(outputPath);
+
+    // Run conversion with progress indicator
     const result = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -107,6 +118,12 @@ export async function handleConvertCommand(uri?: vscode.Uri): Promise<void> {
           preserveLayout: config.preserveLayout,
           detectTables: config.detectTables,
           mergeLines: config.mergeLines,
+          engine: config.engine,
+          extractImages: config.extractImages,
+          imageFormat: config.imageFormat,
+          imageMinSize: config.imageMinSize,
+          pythonPath: config.pythonPath,
+          outputDir,
           onProgress: (current, total) => {
             const increment = (1 / total) * 100;
             progress.report({
@@ -117,12 +134,6 @@ export async function handleConvertCommand(uri?: vscode.Uri): Promise<void> {
         });
       }
     );
-
-    // Determine output path (respects outputFolder setting)
-    const outputDir = await resolveOutputDir(filePath, config.outputFolder);
-    const baseName = path.basename(filePath, '.pdf');
-    const outputPath = path.join(outputDir, `${baseName}.md`);
-    const outputUri = vscode.Uri.file(outputPath);
 
     // Check if file already exists — prompt for overwrite (US5 - T035)
     let shouldWrite = true;
@@ -175,7 +186,7 @@ export async function handleConvertCommand(uri?: vscode.Uri): Promise<void> {
       );
     }
   } catch (err: unknown) {
-    // Enhanced error handling (US5 - T034)
+    // Enhanced error handling
     if (err instanceof PdfExtractionError) {
       switch (err.code) {
         case ErrorCode.CORRUPT_PDF:
@@ -188,6 +199,18 @@ export async function handleConvertCommand(uri?: vscode.Uri): Promise<void> {
           vscode.window.showWarningMessage(err.message);
           break;
         case ErrorCode.IO_ERROR:
+          vscode.window.showErrorMessage(err.message);
+          break;
+        case ErrorCode.MUPDF_INIT_FAILED:
+          vscode.window.showErrorMessage(err.message);
+          break;
+        case ErrorCode.IMAGE_WRITE_FAILED:
+          vscode.window.showWarningMessage(err.message);
+          break;
+        case ErrorCode.PYTHON_NOT_FOUND:
+          vscode.window.showErrorMessage(err.message);
+          break;
+        case ErrorCode.PYTHON_SCRIPT_FAILED:
           vscode.window.showErrorMessage(err.message);
           break;
         default:

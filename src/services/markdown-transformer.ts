@@ -10,6 +10,10 @@ import {
   NormalizedPage,
   TransformerOptions,
   DetectedTable,
+  RichExtractedPage,
+  TextLine,
+  ImageBlock,
+  Block,
 } from '../models/types';
 import { parseFontName } from '../utils/font-utils';
 
@@ -441,3 +445,250 @@ function cleanupOutput(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim() + '\n';
 }
+
+// ─── Rich Block Model Transformer (MuPDF engine) ─────────────────────────────
+
+/**
+ * Caption pattern — matches lines that describe a figure or table.
+ * Case-insensitive.  Examples: "Figure 3:", "Fig. 2 –", "Table 1."
+ */
+const CAPTION_PATTERN = /^(Figure|Fig\.?|Table)\s+\d+/i;
+
+/** Options for the rich-block transformer. */
+export interface RichTransformerOptions extends TransformerOptions {
+  /** Image extraction mode — controls whether image links are emitted */
+  extractImages: 'inline' | 'folder-only' | 'none';
+}
+
+/**
+ * Find the caption text for an image block by looking at the next text content
+ * in the page's block list.
+ * Returns the caption string if found, or an empty string otherwise.
+ */
+function findCaption(blocks: Block[], imageBlockIdx: number): string {
+  for (let i = imageBlockIdx + 1; i < blocks.length; i++) {
+    const next = blocks[i];
+    if (next.type === 'text' && next.lines.length > 0) {
+      const firstLineText = next.lines[0].text.trim();
+      if (CAPTION_PATTERN.test(firstLineText)) {
+        return firstLineText;
+      }
+      // Stop looking if the next block is clearly body text (not a caption)
+      break;
+    }
+    // Skip image blocks between this image and potential caption
+  }
+  return '';
+}
+
+/**
+ * Detect heading levels from a flat list of TextLine objects.
+ * Returns a Map<roundedFontSize, headingLevel (1|2|3)>.
+ */
+function detectHeadingLevelsFromLines(lines: TextLine[]): Map<number, number> {
+  const fontSizeCounts = new Map<number, number>();
+  for (const line of lines) {
+    if (line.isMonospace) continue;
+    const rounded = Math.round(line.fontSize);
+    fontSizeCounts.set(rounded, (fontSizeCounts.get(rounded) || 0) + 1);
+  }
+
+  if (fontSizeCounts.size === 0) {
+    for (const line of lines) {
+      const rounded = Math.round(line.fontSize);
+      fontSizeCounts.set(rounded, (fontSizeCounts.get(rounded) || 0) + 1);
+    }
+  }
+
+  let bodyFontSize = 12;
+  let maxCount = 0;
+  for (const [size, count] of fontSizeCounts) {
+    if (count > maxCount || (count === maxCount && size < bodyFontSize)) {
+      maxCount = count;
+      bodyFontSize = size;
+    }
+  }
+
+  const minHeadingSize = bodyFontSize * 1.15;
+  const headingSizes = new Set<number>();
+  for (const line of lines) {
+    if (line.isMonospace) continue;
+    const rounded = Math.round(line.fontSize);
+    if (rounded >= minHeadingSize) {
+      headingSizes.add(rounded);
+    }
+  }
+
+  const sortedSizes = [...headingSizes].sort((a, b) => b - a);
+  const levels = new Map<number, number>();
+  for (let i = 0; i < Math.min(sortedSizes.length, 3); i++) {
+    levels.set(sortedSizes[i], i + 1);
+  }
+  return levels;
+}
+
+/**
+ * Get the heading level for a TextLine, or 0 if it is not a heading.
+ */
+function getHeadingLevelForLine(
+  line: TextLine,
+  headingLevels: Map<number, number>
+): number {
+  return headingLevels.get(Math.round(line.fontSize)) || 0;
+}
+
+/**
+ * Apply simple inline formatting (bold, italic, URLs) to a TextLine.
+ */
+function formatTextLine(line: TextLine): string {
+  let text = line.text.trim();
+
+  if (line.isBold && line.isItalic) {
+    text = `**_${text}_**`;
+  } else if (line.isBold) {
+    text = `**${text}**`;
+  } else if (line.isItalic) {
+    text = `_${text}_`;
+  }
+
+  // Extract and format URLs
+  text = text.replace(URL_REGEX, (url) => `[${url}](${url})`);
+  return text;
+}
+
+/**
+ * Transform an ExtractedDocument (MuPDF block model) to a Markdown string.
+ * Interleaves text blocks and image blocks in reading order.
+ *
+ * @param pages     - Pages from the MuPDF extraction.
+ * @param imagePaths - Map from ImageBlock → relative POSIX path.
+ * @param options   - Transformer options (detectTables, preserveLayout, extractImages).
+ */
+export function transformRichToMarkdown(
+  pages: RichExtractedPage[],
+  imagePaths: Map<ImageBlock, string>,
+  options: RichTransformerOptions
+): string {
+  if (pages.length === 0) return '';
+
+  // Collect all text lines for heading level detection
+  const allTextLines: TextLine[] = [];
+  for (const page of pages) {
+    for (const block of page.blocks) {
+      if (block.type === 'text') {
+        allTextLines.push(...block.lines);
+      }
+    }
+  }
+
+  if (allTextLines.length === 0 && imagePaths.size === 0) return '';
+
+  const headingLevels = detectHeadingLevelsFromLines(allTextLines);
+
+  const outputLines: string[] = [];
+  let inCodeBlock = false;
+
+  for (const page of pages) {
+    const blocks = page.blocks;
+
+    for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+      const block = blocks[blockIdx];
+
+      if (block.type === 'image') {
+        // Close any open code block
+        if (inCodeBlock) {
+          outputLines.push('```');
+          outputLines.push('');
+          inCodeBlock = false;
+        }
+
+        if (options.extractImages === 'none') continue;
+
+        const relPath = imagePaths.get(block);
+        if (!relPath) continue;
+
+        const caption = findCaption(blocks, blockIdx);
+        const altText = caption || 'Figure';
+
+        if (options.extractImages === 'inline') {
+          outputLines.push(`![${altText}](${relPath})`);
+          if (caption) {
+            outputLines.push(`*${caption}*`);
+          }
+          outputLines.push('');
+        }
+        // folder-only: images were written but we don't emit Markdown links
+        continue;
+      }
+
+      // Text block: walk its lines
+      for (const line of block.lines) {
+        if (line.isMonospace) {
+          if (!inCodeBlock) {
+            outputLines.push('```');
+            inCodeBlock = true;
+          }
+          outputLines.push(line.text);
+          continue;
+        }
+
+        if (inCodeBlock) {
+          outputLines.push('```');
+          outputLines.push('');
+          inCodeBlock = false;
+        }
+
+        // Heading detection
+        const headingLevel = getHeadingLevelForLine(line, headingLevels);
+        if (headingLevel > 0) {
+          outputLines.push(`${'#'.repeat(headingLevel)} ${line.text.trim()}`);
+          outputLines.push('');
+          continue;
+        }
+
+        // List detection (reuse the same patterns as the legacy transformer)
+        const bulletMatch = line.text.match(BULLET_PATTERN);
+        const dashMatch = line.text.match(DASH_LIST_PATTERN);
+        const orderedMatch = line.text.match(ORDERED_LIST_PATTERN);
+
+        if (bulletMatch) {
+          outputLines.push(`- ${formatTextLine({ ...line, text: line.text.slice(bulletMatch[0].length) })}`);
+          continue;
+        }
+        if (dashMatch) {
+          outputLines.push(`- ${formatTextLine({ ...line, text: line.text.slice(dashMatch[0].length) })}`);
+          continue;
+        }
+        if (orderedMatch) {
+          outputLines.push(formatTextLine(line));
+          continue;
+        }
+
+        // Regular paragraph
+        const formatted = formatTextLine(line);
+        if (formatted.trim()) {
+          outputLines.push(formatted);
+          outputLines.push('');
+        }
+      }
+    }
+
+    // Page separator
+    if (page !== pages[pages.length - 1]) {
+      if (inCodeBlock) {
+        outputLines.push('```');
+        outputLines.push('');
+        inCodeBlock = false;
+      }
+      outputLines.push('');
+    }
+  }
+
+  if (inCodeBlock) {
+    outputLines.push('```');
+    outputLines.push('');
+  }
+
+  return cleanupOutput(outputLines.join('\n'));
+}
+
