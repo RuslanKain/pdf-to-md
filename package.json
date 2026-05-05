@@ -1,14 +1,17 @@
 {
-  "name": "pdf-to-markdown",
-  "displayName": "PDF to Markdown",
-  "description": "Convert PDF files into clean, structured Markdown inside VS Code with structure preservation, local processing, and configurable settings.",
+  "name": "pdf-to-md",
+  "displayName": "PDF to Markdown (RuslanKain)",
+  "description": "Convert PDF files into clean, structured Markdown inside VS Code with structure preservation, image extraction, and configurable settings.",
   "icon": "logo.ico",
-  "version": "0.1.1",
-  "publisher": "KarthikDasari",
+  "version": "0.2.0",
+  "publisher": "RuslanKain",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/karthik-dasari/pdf-to-markdown"
+    "url": "https://github.com/RuslanKain/pdf-to-md"
+  },
+  "bugs": {
+    "url": "https://github.com/RuslanKain/pdf-to-md/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -34,6 +37,7 @@
     "vscode:prepublish": "npm run build -- --production"
   },
   "dependencies": {
+    "mupdf": "^1.27.0",
     "pdfjs-dist": "^4.8.69"
   },
   "devDependencies": {
@@ -89,6 +93,34 @@
           "type": "string",
           "default": "",
           "description": "Default output folder for converted Markdown files. Empty = same folder as source PDF."
+        },
+        "pdfToMarkdown.engine": {
+          "type": "string",
+          "enum": ["mupdf", "pdfjs", "pythonSidecar"],
+          "default": "mupdf",
+          "description": "Extraction backend. 'mupdf' (default) uses the bundled MuPDF WASM engine. 'pdfjs' uses the legacy pdfjs-dist heuristics. 'pythonSidecar' shells out to a local Python install with pymupdf4llm for the highest fidelity on research papers."
+        },
+        "pdfToMarkdown.extractImages": {
+          "type": "string",
+          "enum": ["inline", "folder-only", "none"],
+          "default": "inline",
+          "description": "Image extraction mode. 'inline' writes images and inserts Markdown links. 'folder-only' writes images but does not insert links. 'none' skips image extraction entirely."
+        },
+        "pdfToMarkdown.imageFormat": {
+          "type": "string",
+          "enum": ["png", "jpg"],
+          "default": "png",
+          "description": "Output format for extracted images."
+        },
+        "pdfToMarkdown.imageMinSize": {
+          "type": "number",
+          "default": 32,
+          "description": "Minimum width/height in pixels to extract an image; smaller images are treated as decorative and skipped."
+        },
+        "pdfToMarkdown.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Python interpreter for the 'pythonSidecar' engine. Empty = use 'python' from PATH."
         }
       }
     }

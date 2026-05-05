@@ -4,6 +4,103 @@
  * This file has ZERO vscode imports — only pure TypeScript types.
  */
 
+// ─── Rich Block Model (MuPDF engine) ──────────────────────────────────────────
+
+/**
+ * Bounding box as [x0, y0, x1, y1] tuple in PDF device coordinates
+ * (y increases downward, origin at top-left).
+ */
+export type BBox = [number, number, number, number];
+
+/** A text span within a TextLine: a run of characters sharing the same font. */
+export interface TextSpan {
+  /** The span's text content */
+  text: string;
+  /** Bounding box [x0, y0, x1, y1] */
+  bbox: BBox;
+  /** Font size in points */
+  fontSize: number;
+  /** Font name */
+  fontName: string;
+  /** Whether the font is bold */
+  isBold: boolean;
+  /** Whether the font is italic */
+  isItalic: boolean;
+  /** Whether the font is monospace */
+  isMonospace: boolean;
+}
+
+/** A single text line within a TextBlock. */
+export interface TextLine {
+  /** Bounding box [x0, y0, x1, y1] */
+  bbox: BBox;
+  /** Combined text of all spans on this line */
+  text: string;
+  /** Dominant font size in points */
+  fontSize: number;
+  /** Whether the dominant font is bold */
+  isBold: boolean;
+  /** Whether the dominant font is italic */
+  isItalic: boolean;
+  /** Whether the dominant font is monospace */
+  isMonospace: boolean;
+  /** Individual character spans (may be empty if not needed) */
+  spans: TextSpan[];
+}
+
+/** A block of text lines extracted from the PDF. */
+export interface TextBlock {
+  type: 'text';
+  /** Bounding box [x0, y0, x1, y1] */
+  bbox: BBox;
+  /** Ordered lines within this block */
+  lines: TextLine[];
+  /** Dominant font size across all lines */
+  fontSize: number;
+  /** Whether the majority of text is bold */
+  isBold: boolean;
+  /** Whether the majority of text is italic */
+  isItalic: boolean;
+  /** Whether the majority of text is monospace */
+  isMonospace: boolean;
+}
+
+/** An image block extracted from the PDF. */
+export interface ImageBlock {
+  type: 'image';
+  /** Bounding box [x0, y0, x1, y1] in PDF device coordinates */
+  bbox: BBox;
+  /** Image encoding format */
+  format: 'png' | 'jpeg';
+  /** Raw image bytes (PNG or JPEG) */
+  bytes: Uint8Array;
+  /** Image width in pixels */
+  width: number;
+  /** Image height in pixels */
+  height: number;
+}
+
+/** A block is either a text block or an image block. */
+export type Block = TextBlock | ImageBlock;
+
+/** A single page from the MuPDF structured extraction. */
+export interface RichExtractedPage {
+  /** 1-based page index */
+  pageNumber: number;
+  /** Page width in PDF units */
+  width: number;
+  /** Page height in PDF units */
+  height: number;
+  /** Ordered blocks (text + image), sorted by y0 then x0 */
+  blocks: Block[];
+}
+
+/** Result of extracting a document via the MuPDF engine. */
+export interface ExtractedDocument {
+  pages: RichExtractedPage[];
+  metadata: PdfMetadata;
+}
+
 // ─── PDF Extraction Types ──────────────────────────────────────────────────────
 
 /** A single text span extracted from a PDF page, with positional metadata. */
@@ -146,6 +243,18 @@ export interface ConversionOptions {
   detectTables: boolean;
   /** Merge broken lines into coherent paragraphs */
   mergeLines: boolean;
+  /** Extraction engine to use */
+  engine: 'mupdf' | 'pdfjs' | 'pythonSidecar';
+  /** Image extraction mode */
+  extractImages: 'inline' | 'folder-only' | 'none';
+  /** Output image format */
+  imageFormat: 'png' | 'jpg';
+  /** Minimum image dimension in pixels to extract */
+  imageMinSize: number;
+  /** Path to Python interpreter (pythonSidecar engine) */
+  pythonPath: string;
+  /** Resolved output directory for writing .md and assets */
+  outputDir: string;
   /** Progress callback: (currentPage, totalPages) */
   onProgress?: (current: number, total: number) => void;
 }
@@ -175,6 +284,16 @@ export interface ConversionConfiguration {
   mergeLines: boolean;
   /** Default save location for output files (empty = same as source) */
   outputFolder: string;
+  /** Extraction engine */
+  engine: 'mupdf' | 'pdfjs' | 'pythonSidecar';
+  /** Image extraction mode */
+  extractImages: 'inline' | 'folder-only' | 'none';
+  /** Output image format */
+  imageFormat: 'png' | 'jpg';
+  /** Minimum image dimension in pixels */
+  imageMinSize: number;
+  /** Path to Python interpreter */
+  pythonPath: string;
 }
 
 // ─── Conversion Job Types ──────────────────────────────────────────────────────

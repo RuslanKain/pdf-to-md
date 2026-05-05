@@ -11,7 +11,8 @@ const buildOptions = {
   platform: 'node',
   target: 'node18',
   outfile: 'dist/extension.js',
-  external: ['vscode', 'pdfjs-dist/legacy/build/pdf.mjs'],
+  // mupdf is ESM with top-level await — keep it external and ship node_modules/mupdf in the VSIX
+  external: ['vscode', 'pdfjs-dist/legacy/build/pdf.mjs', 'mupdf'],
   sourcemap: !production,
   minify: production,
   logLevel: 'info',
