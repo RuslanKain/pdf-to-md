@@ -1,8 +1,8 @@
-# PDF to Markdown (RuslanKain)
+# PDF to Markdown
 
 **Publisher:** RuslanKain  
 **Repository:** [RuslanKain/pdf-to-md](https://github.com/RuslanKain/pdf-to-md)  
-**Version:** 0.2.0
+**Version:** 0.2.1
 
 Convert PDF files into clean, structured Markdown directly inside VS Code.  
 Supports text-only PDFs, academic / research papers, and **extracts and embeds figures inline**.

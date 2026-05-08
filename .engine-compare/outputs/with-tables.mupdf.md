@@ -1,23 +1,5 @@
-**Name**
-
-**Age**
-
-**City**
-
-Alice
-
-30
-
-New York
-
-Bob
-
-25
-
-San Francisco
-
-Charlie
-
-35
-
-Chicago
+| Name | Age | City |
+| --- | --- | --- |
+| Alice | 30 | New York |
+| Bob | 25 | San Francisco |
+| Charlie | 35 | Chicago |

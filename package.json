@@ -1,9 +1,9 @@
 {
   "name": "pdf-to-md",
-  "displayName": "PDF to Markdown (RuslanKain)",
+  "displayName": "PDF to MD",
   "description": "Convert PDF files into clean, structured Markdown inside VS Code with structure preservation, image extraction, and configurable settings.",
   "icon": "logo.ico",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "RuslanKain",
   "license": "MIT",
   "repository": {
