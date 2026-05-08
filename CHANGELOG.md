@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.2.1] - 2026-05-05
+## [0.2.2] - 2026-05-05
 
 ### Added
 
@@ -44,7 +44,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - **Rebranded** — `name: pdf-to-md`, `publisher: RuslanKain`,
-  `displayName: "PDF to Markdown"`, `version: 0.2.1`.
+  `displayName: "PDF to Markdown"`, `version: 0.2.2`.
 - **Repository URL** updated to `https://github.com/RuslanKain/pdf-to-md`.
 - **`ConversionOptions`** extended with `engine`, `extractImages`, `imageFormat`,
   `imageMinSize`, `pythonPath`, and `outputDir` fields.
