@@ -321,6 +321,30 @@ describe('transformRichToMarkdown', () => {
       expect(result).toContain('const x = 1;');
     });
 
+    it('should reconstruct a markdown table from MuPDF-style grid blocks', () => {
+      const page = makePage([
+        makeTextBlock([makeTextLine('Name', 12, [72, 100, 140, 115])], [72, 100, 140, 115]),
+        makeTextBlock([makeTextLine('Age', 12, [220, 100, 270, 115])], [220, 100, 270, 115]),
+        makeTextBlock([makeTextLine('City', 12, [330, 100, 410, 115])], [330, 100, 410, 115]),
+        makeTextBlock([makeTextLine('Alice', 12, [72, 130, 150, 145])], [72, 130, 150, 145]),
+        makeTextBlock([makeTextLine('30', 12, [220, 130, 245, 145])], [220, 130, 245, 145]),
+        makeTextBlock([makeTextLine('New York', 12, [330, 130, 430, 145])], [330, 130, 430, 145]),
+        makeTextBlock([makeTextLine('Bob', 12, [72, 160, 130, 175])], [72, 160, 130, 175]),
+        makeTextBlock([makeTextLine('25', 12, [220, 160, 245, 175])], [220, 160, 245, 175]),
+        makeTextBlock([makeTextLine('San Francisco', 12, [330, 160, 470, 175])], [330, 160, 470, 175]),
+      ]);
+
+      const result = transformRichToMarkdown([page], new Map(), {
+        ...defaultOptions,
+        detectTables: true,
+      });
+
+      expect(result).toContain('| Name | Age | City |');
+      expect(result).toContain('| --- | --- | --- |');
+      expect(result).toContain('| Alice | 30 | New York |');
+      expect(result).toContain('| Bob | 25 | San Francisco |');
+    });
+
     it('should return empty string for pages with no blocks', () => {
       const result = transformRichToMarkdown([], new Map(), defaultOptions);
       expect(result.trim()).toBe('');

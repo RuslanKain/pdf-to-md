@@ -26,9 +26,6 @@ const URL_REGEX = /https?:\/\/[^\s)>\]]+/g;
  */
 const BULLET_PATTERN = /^[\u2022\u25CF\u25E6\u25AA\u25B8\u2023\u2043\u2013\u2014\u201C\u201D\u2018\u2019\u00B7\u0022]\s*/;
 
-/** Characters that signal the start of a bullet item (used in merge heuristic). */
-const BULLET_CHARS = new Set('\u2022\u25CF\u25E6\u25AA\u25B8\u2023\u2043\u2013\u2014\u201C\u201D\u2018\u2019\u00B7"');
-
 /** Ordered list item pattern (e.g., "1.", "2)", "a."). */
 const ORDERED_LIST_PATTERN = /^(\d+)[.)]\s+/;
 
@@ -460,6 +457,269 @@ export interface RichTransformerOptions extends TransformerOptions {
   extractImages: 'inline' | 'folder-only' | 'none';
 }
 
+interface TableCellCandidate {
+  blockIndex: number;
+  text: string;
+  x0: number;
+  y0: number;
+}
+
+interface RichTableRegion {
+  blockIndices: Set<number>;
+  table: DetectedTable;
+}
+
+/**
+ * Group sorted numeric values into clusters by tolerance and return
+ * each cluster's representative center.
+ */
+function clusterValues(values: number[], tolerance: number): number[] {
+  if (values.length === 0) return [];
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const clusters: number[] = [];
+  let current = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i++) {
+    if (Math.abs(sorted[i] - current[current.length - 1]) <= tolerance) {
+      current.push(sorted[i]);
+    } else {
+      clusters.push(current.reduce((s, v) => s + v, 0) / current.length);
+      current = [sorted[i]];
+    }
+  }
+
+  clusters.push(current.reduce((s, v) => s + v, 0) / current.length);
+  return clusters;
+}
+
+function nearestClusterIndex(value: number, centers: number[]): number {
+  let bestIdx = 0;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < centers.length; i++) {
+    const d = Math.abs(value - centers[i]);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+/**
+ * Try to build a markdown table from a run of simple single-line text blocks.
+ * Returns null when the run does not look like a tabular grid.
+ */
+function detectRichTableFromRun(
+  run: TableCellCandidate[],
+  lineOffset: number
+): RichTableRegion | null {
+  if (run.length < 4) return null;
+
+  const rowCenters = clusterValues(run.map((c) => c.y0), 8);
+  const colCenters = clusterValues(run.map((c) => c.x0), 20);
+
+  if (rowCenters.length < 2 || colCenters.length < 2) return null;
+  if (colCenters.length > 8) return null;
+
+  const rowMap = new Map<number, Map<number, string>>();
+  const used = new Set<number>();
+
+  for (const cell of run) {
+    const row = nearestClusterIndex(cell.y0, rowCenters);
+    const col = nearestClusterIndex(cell.x0, colCenters);
+
+    let rowCells = rowMap.get(row);
+    if (!rowCells) {
+      rowCells = new Map<number, string>();
+      rowMap.set(row, rowCells);
+    }
+
+    const existing = rowCells.get(col);
+    rowCells.set(col, existing ? `${existing} ${cell.text}`.trim() : cell.text);
+    used.add(cell.blockIndex);
+  }
+
+  const rowIndices = [...rowMap.keys()].sort((a, b) => a - b);
+  if (rowIndices.length < 2) return null;
+
+  const rowLengths = rowIndices.map((r) => rowMap.get(r)?.size ?? 0);
+  const minRowLen = Math.min(...rowLengths);
+  const maxRowLen = Math.max(...rowLengths);
+
+  if (minRowLen < 2 || maxRowLen < 2) return null;
+
+  const density = run.length / (rowIndices.length * colCenters.length);
+  if (density < 0.7) return null;
+
+  const headers = Array.from({ length: colCenters.length }, (_, col) => {
+    return (rowMap.get(rowIndices[0])?.get(col) ?? '').trim();
+  });
+
+  if (headers.filter((h) => h.length > 0).length < 2) return null;
+
+  const rows: string[][] = [];
+  for (let i = 1; i < rowIndices.length; i++) {
+    const row = Array.from({ length: colCenters.length }, (_, col) => {
+      return (rowMap.get(rowIndices[i])?.get(col) ?? '').trim();
+    });
+    rows.push(row);
+  }
+
+  return {
+    blockIndices: used,
+    table: {
+      startLineIndex: lineOffset,
+      endLineIndex: lineOffset + rowIndices.length - 1,
+      headers,
+      rows,
+    },
+  };
+}
+
+/**
+ * Detect table-like regions directly from MuPDF rich text blocks.
+ */
+function detectRichTablesInPage(blocks: Block[]): RichTableRegion[] {
+  const regions: RichTableRegion[] = [];
+  let run: TableCellCandidate[] = [];
+
+  // Strategy 1: table rows encoded as multi-line text blocks where each line is a column.
+  const multiLineRowBlocks = blocks
+    .map((block, blockIndex) => ({ block, blockIndex }))
+    .filter((entry) => {
+      if (entry.block.type !== 'text') return false;
+      const lines = entry.block.lines;
+      if (lines.length < 2 || lines.length > 8) return false;
+      if (lines.some((l) => l.isMonospace)) return false;
+
+      const yValues = lines.map((l) => l.bbox[1]);
+      const ySpread = Math.max(...yValues) - Math.min(...yValues);
+      return ySpread <= 4;
+    });
+
+  if (multiLineRowBlocks.length >= 2) {
+    let rowRun: typeof multiLineRowBlocks = [];
+
+    const flushRowRun = () => {
+      if (rowRun.length < 2) {
+        rowRun = [];
+        return;
+      }
+
+      const firstLines = [...rowRun[0].block.lines].sort((a, b) => a.bbox[0] - b.bbox[0]);
+      const colCount = firstLines.length;
+      const refCols = firstLines.map((l) => l.bbox[0]);
+
+      if (colCount < 2 || colCount > 8) {
+        rowRun = [];
+        return;
+      }
+
+      const rows: string[][] = [];
+      let aligned = true;
+
+      for (const rowEntry of rowRun) {
+        const sortedLines = [...rowEntry.block.lines].sort((a, b) => a.bbox[0] - b.bbox[0]);
+        if (sortedLines.length !== colCount) {
+          aligned = false;
+          break;
+        }
+
+        for (let c = 0; c < colCount; c++) {
+          if (Math.abs(sortedLines[c].bbox[0] - refCols[c]) > 20) {
+            aligned = false;
+            break;
+          }
+        }
+
+        if (!aligned) break;
+
+        rows.push(sortedLines.map((l) => l.text.trim()));
+      }
+
+      if (aligned && rows.length >= 2) {
+        const headers = rows[0];
+        if (headers.filter((h) => h.length > 0).length >= 2) {
+          regions.push({
+            blockIndices: new Set(rowRun.map((r) => r.blockIndex)),
+            table: {
+              startLineIndex: 0,
+              endLineIndex: rows.length - 1,
+              headers,
+              rows: rows.slice(1),
+            },
+          });
+        }
+      }
+
+      rowRun = [];
+    };
+
+    for (let i = 0; i < multiLineRowBlocks.length; i++) {
+      const current = multiLineRowBlocks[i];
+      const prev = rowRun[rowRun.length - 1];
+
+      if (!prev) {
+        rowRun.push(current);
+        continue;
+      }
+
+      if (current.blockIndex === prev.blockIndex + 1) {
+        rowRun.push(current);
+      } else {
+        flushRowRun();
+        rowRun.push(current);
+      }
+    }
+
+    flushRowRun();
+  }
+
+  if (regions.length > 0) {
+    return regions;
+  }
+
+  const flushRun = () => {
+    if (run.length === 0) return;
+    const region = detectRichTableFromRun(run, 0);
+    if (region) {
+      regions.push(region);
+    }
+    run = [];
+  };
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (block.type !== 'text') {
+      flushRun();
+      continue;
+    }
+
+    if (block.lines.length !== 1) {
+      flushRun();
+      continue;
+    }
+
+    const line = block.lines[0];
+    const text = line.text.trim();
+    if (!text || line.isMonospace || CAPTION_PATTERN.test(text)) {
+      flushRun();
+      continue;
+    }
+
+    run.push({
+      blockIndex: i,
+      text,
+      x0: block.bbox[0],
+      y0: block.bbox[1],
+    });
+  }
+
+  flushRun();
+  return regions;
+}
+
 /**
  * Find the caption text for an image block by looking at the next text content
  * in the page's block list.
@@ -590,8 +850,34 @@ export function transformRichToMarkdown(
 
   for (const page of pages) {
     const blocks = page.blocks;
+    const tableRegions = options.detectTables ? detectRichTablesInPage(blocks) : [];
+    const tableByBlockIndex = new Map<number, RichTableRegion>();
+    const consumedByTable = new Set<number>();
+    for (const region of tableRegions) {
+      for (const idx of region.blockIndices) {
+        consumedByTable.add(idx);
+      }
+      const firstIdx = Math.min(...region.blockIndices);
+      tableByBlockIndex.set(firstIdx, region);
+    }
 
     for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+      const tableRegion = tableByBlockIndex.get(blockIdx);
+      if (tableRegion) {
+        if (inCodeBlock) {
+          outputLines.push('```');
+          outputLines.push('');
+          inCodeBlock = false;
+        }
+        outputLines.push(...renderTable(tableRegion.table));
+        outputLines.push('');
+        continue;
+      }
+
+      if (consumedByTable.has(blockIdx)) {
+        continue;
+      }
+
       const block = blocks[blockIdx];
 
       if (block.type === 'image') {

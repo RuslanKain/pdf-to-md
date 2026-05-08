@@ -1,0 +1,6 @@
+PdfExtractionError: The Python conversion script exited with an error. Check that pymupdf4llm is installed (pip install pymupdf4llm).
+    at <anonymous> (/home/rhk/git/pdf-to-md/src/services/python-sidecar.ts:37:9)
+    at new Promise (<anonymous>)
+    at convertWithPython (/home/rhk/git/pdf-to-md/src/services/python-sidecar.ts:31:10)
+    at convertPdfToMarkdown (/home/rhk/git/pdf-to-md/src/services/conversion-pipeline.ts:56:28)
+    at main (/home/rhk/git/pdf-to-md/.engine-compare/compare.ts:23:28)

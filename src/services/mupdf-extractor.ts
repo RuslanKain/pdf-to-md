@@ -62,6 +62,119 @@ function toBBox(rect: number[]): BBox {
 }
 
 /**
+ * Basic geometric sort: top-to-bottom (y0), then left-to-right (x0).
+ */
+function sortByTopThenLeft(blocks: Block[]): Block[] {
+  return [...blocks].sort((a, b) => {
+    const dy = a.bbox[1] - b.bbox[1];
+    if (Math.abs(dy) > 1) return dy;
+    return a.bbox[0] - b.bbox[0];
+  });
+}
+
+/**
+ * Detect whether a page likely uses a two-column layout.
+ * This heuristic is intentionally conservative to avoid harming single-column docs.
+ */
+function isLikelyTwoColumnLayout(blocks: Block[], pageWidth: number): boolean {
+  const textBlocks = blocks.filter((b): b is TextBlock => b.type === 'text');
+  if (textBlocks.length < 6) return false;
+
+  const centerX = pageWidth / 2;
+  const gutterHalfWidth = pageWidth * 0.05;
+  const gutterLeft = centerX - gutterHalfWidth;
+  const gutterRight = centerX + gutterHalfWidth;
+
+  let leftCount = 0;
+  let rightCount = 0;
+  let crossingCount = 0;
+
+  for (const block of textBlocks) {
+    const [x0, , x1] = block.bbox;
+    const width = x1 - x0;
+    const mid = (x0 + x1) / 2;
+
+    if (x0 < gutterLeft && x1 > gutterRight) {
+      crossingCount++;
+      continue;
+    }
+
+    if (mid < centerX) leftCount++;
+    else rightCount++;
+
+    // If many text blocks are very wide, this is probably not a 2-col page.
+    if (width > pageWidth * 0.7) {
+      crossingCount++;
+    }
+  }
+
+  const textCount = textBlocks.length;
+  const crossingRatio = crossingCount / Math.max(1, textCount);
+
+  return leftCount >= 3 && rightCount >= 3 && crossingRatio <= 0.35;
+}
+
+/**
+ * Sort blocks in reading order with a two-column heuristic.
+ *
+ * For likely two-column pages:
+ *   1. top full-width blocks
+ *   2. left column (top→bottom)
+ *   3. right column (top→bottom)
+ *   4. remaining full-width blocks
+ * Otherwise falls back to simple y-then-x sorting.
+ */
+export function sortBlocksForReadingOrder(
+  blocks: Block[],
+  pageWidth: number
+): Block[] {
+  if (!isLikelyTwoColumnLayout(blocks, pageWidth)) {
+    return sortByTopThenLeft(blocks);
+  }
+
+  const centerX = pageWidth / 2;
+  const gutterHalfWidth = pageWidth * 0.05;
+  const gutterLeft = centerX - gutterHalfWidth;
+  const gutterRight = centerX + gutterHalfWidth;
+
+  const fullWidth: Block[] = [];
+  const leftColumn: Block[] = [];
+  const rightColumn: Block[] = [];
+
+  for (const block of blocks) {
+    const [x0, , x1] = block.bbox;
+    const mid = (x0 + x1) / 2;
+
+    if (x0 < gutterLeft && x1 > gutterRight) {
+      fullWidth.push(block);
+      continue;
+    }
+
+    if (mid < centerX) leftColumn.push(block);
+    else rightColumn.push(block);
+  }
+
+  const leftSorted = sortByTopThenLeft(leftColumn);
+  const rightSorted = sortByTopThenLeft(rightColumn);
+  const fullSorted = sortByTopThenLeft(fullWidth);
+
+  // Keep top-of-page full-width material (titles/author blocks) ahead of columns.
+  const firstColumnY = Math.min(
+    leftSorted[0]?.bbox[1] ?? Number.POSITIVE_INFINITY,
+    rightSorted[0]?.bbox[1] ?? Number.POSITIVE_INFINITY
+  );
+
+  const topFull: Block[] = [];
+  const bottomFull: Block[] = [];
+  for (const block of fullSorted) {
+    if (block.bbox[1] <= firstColumnY + 20) topFull.push(block);
+    else bottomFull.push(block);
+  }
+
+  return [...topFull, ...leftSorted, ...rightSorted, ...bottomFull];
+}
+
+/**
  * Extract structured content from a PDF using MuPDF's structured text walker.
  * Produces TextBlocks and ImageBlocks sorted by reading order.
  *
@@ -112,7 +225,7 @@ export async function extractWithMupdf(
     const pageWidth = bounds[2] - bounds[0];
     const pageHeight = bounds[3] - bounds[1];
 
-    const blocks = extractPageBlocks(page, imageFormat, imageMinSize, mupdf);
+    const blocks = extractPageBlocks(page, imageFormat, imageMinSize);
 
     pages.push({
       pageNumber: pageIdx + 1,
@@ -137,7 +250,7 @@ export async function extractWithMupdf(
  * Blocks are sorted by y0 (top-to-bottom), then x0 (left-to-right).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractPageBlocks(page: any, imageFormat: 'png' | 'jpg', imageMinSize: number, mupdf: any): Block[] {
+function extractPageBlocks(page: any, imageFormat: 'png' | 'jpg', imageMinSize: number): Block[] {
   const blocks: Block[] = [];
 
   // Collect text block state during walking
@@ -244,14 +357,7 @@ function extractPageBlocks(page: any, imageFormat: 'png' | 'jpg', imageMinSize: 
     },
   });
 
-  // Sort blocks: top-to-bottom (y0), then left-to-right (x0)
-  blocks.sort((a, b) => {
-    const dy = a.bbox[1] - b.bbox[1];
-    if (Math.abs(dy) > 1) return dy;
-    return a.bbox[0] - b.bbox[0];
-  });
-
-  return blocks;
+  return sortBlocksForReadingOrder(blocks, page.getBounds()[2] - page.getBounds()[0]);
 }
 
 /**
