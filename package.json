@@ -1,6 +1,6 @@
 {
-  "name": "pdf-to-md",
-  "displayName": "PDF to MD",
+  "name": "convert-pdf-to-md",
+  "displayName": "Convert PDF to MD",
   "description": "Convert PDF files into clean, structured Markdown inside VS Code with structure preservation, image extraction, and configurable settings.",
   "icon": "logo.ico",
   "version": "0.2.2",
@@ -8,10 +8,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/RuslanKain/pdf-to-md"
+    "url": "https://github.com/RuslanKain/convert-pdf-to-md"
   },
   "bugs": {
-    "url": "https://github.com/RuslanKain/pdf-to-md/issues"
+    "url": "https://github.com/RuslanKain/convert-pdf-to-md/issues"
   },
   "engines": {
     "vscode": "^1.85.0"

@@ -43,9 +43,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- **Rebranded** — `name: pdf-to-md`, `publisher: RuslanKain`,
+- **Rebranded** — `name: convert-pdf-to-md`, `publisher: RuslanKain`,
   `displayName: "PDF to Markdown"`, `version: 0.2.2`.
-- **Repository URL** updated to `https://github.com/RuslanKain/pdf-to-md`.
+- **Repository URL** updated to `https://github.com/RuslanKain/convert-pdf-to-md`.
 - **`ConversionOptions`** extended with `engine`, `extractImages`, `imageFormat`,
   `imageMinSize`, `pythonPath`, and `outputDir` fields.
 - **`ConversionConfiguration`** extended with the same five new settings.
