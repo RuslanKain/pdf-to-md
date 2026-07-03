@@ -42,7 +42,7 @@ function makeDocument(imageBlocks: ImageBlock[]): ExtractedDocument {
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-to-md-test-'));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'convert-pdf-to-md-test-'));
 });
 
 afterEach(() => {
